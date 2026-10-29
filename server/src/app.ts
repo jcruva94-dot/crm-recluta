@@ -124,9 +124,9 @@ export async function buildApp(opts: { logger?: boolean } = {}) {
   // Sirve el frontend compilado (producción)
   const webDist = path.resolve(config.rootDir, '..', 'web', 'dist');
   if (fs.existsSync(webDist)) {
-    await app.register(fastifyStatic, { root: webDist, wildcard: false });
+    await app.register(fastifyStatic, { root: webDist, wildcard: true });
     app.setNotFoundHandler((req, reply) => {
-      if (req.url.startsWith('/api/')) return reply.status(404).send({ error: 'no_encontrado', message: 'Ruta no encontrada' });
+      if (req.url.startsWith('/api/') || req.url.startsWith('/assets/')) return reply.status(404).send({ error: 'no_encontrado', message: 'Ruta no encontrada' });
       return reply.type('text/html').sendFile('index.html');
     });
   }

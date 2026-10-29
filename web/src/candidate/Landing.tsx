@@ -20,6 +20,9 @@ export function VacancyLanding() {
   const { code, slug } = useParams();
   const { data, error, loading, reload } = useLoad(() => api(code ? `/api/public/links/${code}` : `/api/public/vacancies/${slug}`), [code, slug]);
   const [applying, setApplying] = useState(false);
+  // Si el candidato ya tiene sesión y se postuló a esta vacante, mostramos su estatus en lugar del registro
+  const me = useLoad(() => api('/api/portal/me').catch(() => null), []);
+  const existing = data && me.data?.applications?.find((a: any) => a.vacancyId === data.vacancy.id);
   if (loading) return <CandidateShell><Loading /></CandidateShell>;
   if (error || !data) return <CandidateShell><ErrorBox error={error} onRetry={reload} /><p className="mt-4 text-center"><Link className="text-brand-700 underline" to="/empleo">Ver otras vacantes</Link></p></CandidateShell>;
   const v = data.vacancy;
@@ -36,6 +39,18 @@ export function VacancyLanding() {
             </div>
             {v.salary_text && <p className="mt-4 text-lg font-semibold">{v.salary_text}</p>}
           </header>
+          {existing && (
+            <div className="rounded-2xl border border-brand-100 bg-white p-4 shadow-sm" data-testid="existing-status">
+              <p className="text-sm text-slate-500">Hola {me.data.candidate.first_name}, ya te postulaste a esta vacante</p>
+              <p className="mt-1 text-lg font-semibold text-slate-900">Estatus: {existing.status}</p>
+              <Link to={`/portal/postulacion/${existing.id}`} className="mt-3 inline-flex w-full justify-center rounded-lg bg-brand-700 px-5 py-3 font-semibold text-white">Ver mi proceso</Link>
+            </div>
+          )}
+          {!existing && (
+            <Link to="/portal/ingresar" className="flex items-center justify-between rounded-xl border border-slate-200 bg-white p-3 text-sm shadow-sm">
+              <span>¿Ya te postulaste? <strong>Consulta tu estatus</strong></span><span aria-hidden className="text-brand-700">→</span>
+            </Link>
+          )}
           {!v.accepting && <Notice tone="amber">Esta vacante ya no está recibiendo postulaciones. <Link to="/empleo" className="font-semibold underline">Ver vacantes abiertas</Link></Notice>}
           <div className="space-y-5 rounded-2xl bg-white p-5 shadow-sm">
             {v.summary && <p className="text-slate-700">{v.summary}</p>}
@@ -52,13 +67,12 @@ export function VacancyLanding() {
             )}
             {v.response_time_text && <p className="text-sm text-slate-500">⏱ {v.response_time_text}</p>}
           </div>
-          {v.accepting && (
+          {v.accepting && !existing && (
             <div className="sticky bottom-0 -mx-4 border-t border-slate-200 bg-white/95 p-4 backdrop-blur">
               <Button size="lg" onClick={() => setApplying(true)}>Postularme</Button>
               <p className="mt-2 text-center text-xs text-slate-500">Solo nombre y celular. Toma menos de 5 minutos.</p>
             </div>
           )}
-          <p className="text-center text-sm text-slate-500">¿Ya iniciaste tu registro? <Link to="/portal/ingresar" className="font-semibold text-brand-700 underline">Continúa aquí</Link></p>
         </article>
       ) : (
         <ApplyForm vacancyTitle={v.title} linkCode={code} vacancySlug={code ? undefined : slug} onBack={() => setApplying(false)} />

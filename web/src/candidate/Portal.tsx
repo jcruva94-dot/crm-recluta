@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { api, ApiError } from '../shared/api';
+import { api, ApiError, uploadFile } from '../shared/api';
 import { fmtLongSlot, fmtDayHeader, dayKey, fmtTime } from '../shared/format';
 import { Button, Card, ErrorBox, Field, Input, Loading, Modal, Notice, Select, Textarea, useLoad } from '../shared/ui';
 import { CandidateShell, Progress } from './Shell';
@@ -61,6 +61,7 @@ export function ApplicationPage() {
           </Card>
         )}
         {app.nextStep === 'agendar' && <SlotPicker app={app} onDone={setData} />}
+        {app.documents?.length > 0 && <Documents app={app} onChange={setData} />}
         {app.interviews.filter((i: any) => ['agendada', 'confirmada'].includes(i.status)).map((i: any) => <InterviewCard key={i.id} app={app} interview={i} onChange={setData} />)}
 
         {app.interviews.some((i: any) => !['agendada', 'confirmada'].includes(i.status)) && (
@@ -201,6 +202,59 @@ function QuestionsStep({ app, onDone }: { app: any; onDone: (a: any) => void }) 
       </Card>
       <p className="mt-3 text-center text-xs text-slate-500">Tus respuestas se guardan automáticamente. Puedes salir y continuar más tarde.</p>
     </div>
+  );
+}
+
+const DOC_TONE: Record<string, string> = {
+  solicitado: 'bg-amber-50 text-amber-800', recibido: 'bg-brand-50 text-brand-700', en_revision: 'bg-brand-50 text-brand-700', aprobado: 'bg-emerald-50 text-emerald-700',
+  requiere_correccion: 'bg-red-50 text-red-700', rechazado: 'bg-red-50 text-red-700', vencido: 'bg-red-50 text-red-700',
+};
+
+function Documents({ app, onChange }: { app: any; onChange: (a: any) => void }) {
+  const docs = app.documents as any[];
+  const done = docs.filter((d) => d.status === 'aprobado').length;
+  return (
+    <Card title="Mis documentos" actions={<span className="text-xs text-slate-500">{done} de {docs.length} aprobados</span>}>
+      <p className="mb-3 text-sm text-slate-600">Sube cada documento en <strong>PDF</strong> (máximo 5 MB). Tip: en tu celular usa la opción "Escanear documento" de la cámara o de Google Drive para crear el PDF.</p>
+      <ul className="space-y-3">{docs.map((d) => <DocumentRow key={d.id} d={d} onChange={onChange} />)}</ul>
+    </Card>
+  );
+}
+
+function DocumentRow({ d, onChange }: { d: any; onChange: (a: any) => void }) {
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const pick = async (file: File | undefined) => {
+    if (!file) return;
+    setErr(null);
+    if (file.size > 5 * 1024 * 1024) { setErr('El archivo pesa más de 5 MB. Reduce su tamaño e inténtalo de nuevo.'); return; }
+    if (file.type && file.type !== 'application/pdf') { setErr('Selecciona un archivo PDF. Si tienes una foto, conviértela a PDF primero.'); return; }
+    setBusy(true);
+    try { const r = await uploadFile(`/api/portal/documents/${d.id}/file`, file); onChange(r.application); }
+    catch (e: any) { setErr(e.message); } finally { setBusy(false); if (inputRef.current) inputRef.current.value = ''; }
+  };
+  return (
+    <li className="rounded-xl border border-slate-200 p-3" data-testid="document-row">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="font-medium">{d.name}</p>
+          {d.instructions && <p className="text-xs text-slate-500">{d.instructions}</p>}
+        </div>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${DOC_TONE[d.status] ?? 'bg-slate-100'}`}>{d.statusLabel}</span>
+      </div>
+      {d.correction && <p className="mt-2 rounded-lg bg-red-50 p-2 text-sm text-red-800">Qué corregir: {d.correction}</p>}
+      {d.file && <p className="mt-2 text-xs text-slate-500">Archivo enviado: <a className="text-brand-700 underline" href={`/api/portal/documents/${d.id}/file`} target="_blank" rel="noreferrer">{d.file.filename}</a></p>}
+      {d.canUpload && (
+        <div className="mt-2">
+          <input ref={inputRef} type="file" accept="application/pdf,.pdf" className="sr-only" id={`f-${d.id}`} onChange={(e) => pick(e.target.files?.[0])} aria-label={`Subir ${d.name}`} />
+          <label htmlFor={`f-${d.id}`} className={`inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold ${busy ? 'bg-slate-200 text-slate-500' : 'bg-brand-700 text-white hover:bg-brand-600'}`}>
+            {busy ? 'Subiendo…' : d.file ? 'Subir nueva versión (PDF)' : 'Subir PDF'}
+          </label>
+        </div>
+      )}
+      {err && <p role="alert" className="mt-2 text-sm text-red-700">{err}</p>}
+    </li>
   );
 }
 

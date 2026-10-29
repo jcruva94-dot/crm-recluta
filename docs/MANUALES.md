@@ -37,6 +37,8 @@ Resultados: *Compatible* (puntuación ≥ umbral compatible) y *Compatible con o
 
 **Ligas personales.** En la vacante puedes generar ligas a tu nombre para compartir por WhatsApp; los candidatos que lleguen por ahí se te asignan.
 
+**Documentos.** En la ficha, "Solicitar documentos" (o automáticamente al mover a "Documentación pendiente", según los documentos configurados en la vacante). Cuando el candidato sube un PDF se crea una tarea "Validar documento". Con "Revisar" abres el PDF y lo apruebas, pides corrección (el candidato ve tu mensaje y sube una nueva versión) o lo rechazas. Cada descarga queda en auditoría. Entrevistadores y auditores no pueden descargar documentos.
+
 **Mensajes.** Mientras no haya proveedor conectado, el panel muestra "Mensajería en modo de pruebas": **los mensajes no llegan al candidato**. Contáctalo por teléfono.
 
 ## 3. Guía del portal del candidato
@@ -50,4 +52,6 @@ Resultados: *Compatible* (puntuación ≥ umbral compatible) y *Compatible con o
 7. Elige horario. Después puedes **confirmar**, **reprogramar** (hasta 3 veces) o **cancelar**.
 8. Para volver otro día entra a `/portal/ingresar` con tu celular o correo; no necesitas contraseña.
 9. En **Mi perfil** actualizas correo, ciudad y preferencias (incluido no recibir mensajes no esenciales). En **Ayuda** hay preguntas frecuentes y un formulario que llega a tu reclutador.
-10. Si ya no te interesa, usa "Ya no me interesa esta vacante".
+10. En **Mis documentos** sube cada documento en PDF (máx. 5 MB). Si te piden corrección, verás el motivo y podrás subirlo de nuevo.
+11. Si vuelves a abrir la liga de la vacante, verás tu estatus y el botón "Ver mi proceso".
+12. Si ya no te interesa, usa "Ya no me interesa esta vacante".

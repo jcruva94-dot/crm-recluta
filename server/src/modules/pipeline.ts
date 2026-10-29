@@ -1,6 +1,7 @@
 import type { PoolClient } from 'pg';
 import { audit, type Actor } from '../lib/audit.js';
 import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
+import { requestDocuments } from './documents.js';
 
 export interface MoveOptions {
   actor: Actor;
@@ -74,6 +75,11 @@ export async function moveStage(c: PoolClient, applicationId: string, toCode: st
       [applicationId, t.type, t.title, app.recruiter_id, String(t.hours), t.priority, `${applicationId}:${toCode}:${t.type}:${h.id}`],
     );
   }
+  if (toCode === 'documentacion_pendiente') {
+    // Solicita automáticamente los documentos configurados en la vacante
+    const types = (await c.query('select document_type_id from vacancy_document_types where vacancy_id = $1', [app.vacancy_id])).rows.map((r) => r.document_type_id);
+    await requestDocuments(c, applicationId, types, o.actor);
+  }
   await audit(c, o.actor, isOverride ? 'pipeline.override' : 'pipeline.move', 'application', applicationId, { from: app.stage_code, to: toCode, reason: o.reason ?? null });
   return { from: app.stage_code, to: toCode, isOverride };
 }
@@ -117,7 +123,7 @@ export const CANDIDATE_STATUS: Record<string, { title: string; message: string }
   evaluacion: { title: 'Evaluación', message: 'Tu proceso continúa con una evaluación. Te enviaremos instrucciones.' },
   entrevista_supervisor: { title: 'Entrevista adicional', message: 'Tendrás una entrevista con el área operativa. Te contactaremos para agendarla.' },
   validacion_requisitos: { title: 'Validación de requisitos', message: 'Estamos validando la información de tu proceso.' },
-  documentacion_pendiente: { title: 'Documentación', message: 'Te pediremos algunos documentos para continuar.' },
+  documentacion_pendiente: { title: 'Sube tus documentos', message: 'Para continuar necesitamos algunos documentos en PDF. Súbelos en la sección "Mis documentos".' },
   oferta: { title: 'Oferta laboral', message: 'Tienes una propuesta en revisión. Tu reclutador te dará los detalles.' },
   oferta_aceptada: { title: 'Oferta aceptada', message: 'Estamos preparando tu ingreso.' },
   contratacion_confirmada: { title: 'Contratación confirmada', message: 'Bienvenido. Te enviaremos los detalles de tu inducción.' },

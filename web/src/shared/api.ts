@@ -25,3 +25,17 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
   }
   return body as T;
 }
+
+/** Sube un archivo como multipart/form-data (campo "file"). */
+export async function uploadFile<T = any>(path: string, file: File): Promise<T> {
+  const fd = new FormData();
+  fd.append('file', file);
+  const headers: Record<string, string> = { 'x-requested-with': 'crm' };
+  if (csrfToken && path.startsWith('/api/admin')) headers['x-csrf-token'] = csrfToken;
+  let res: Response;
+  try { res = await fetch(path, { method: 'POST', headers, body: fd, credentials: 'same-origin' }); }
+  catch { throw new ApiError(0, 'Sin conexión. Revisa tu internet e intenta de nuevo.', null); }
+  const body = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiError(res.status, body?.message ?? 'No se pudo subir el archivo', body);
+  return body as T;
+}

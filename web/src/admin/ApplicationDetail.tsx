@@ -66,6 +66,8 @@ export function ApplicationDetail() {
             )}
           </Card>
 
+          {!isInterviewer && <DocumentsCard appId={a.id} docs={data.documents} onChange={reload} />}
+
           <Card title="Historial del proceso">
             <ol className="space-y-2 text-sm">{data.history.map((h: any) => (
               <li key={h.id} className="border-l-2 border-slate-200 pl-3">
@@ -256,6 +258,78 @@ function AssignDialog({ appId, open, onClose, onDone }: { appId: string; open: b
         <div className="flex justify-end gap-2"><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button disabled={!rid} onClick={async () => {
           try { await api(`/api/admin/applications/${appId}/assign`, { body: { recruiterId: rid } }); onClose(); onDone(); } catch (e: any) { setErr(e.message); }
         }}>Asignar</Button></div>
+      </div>
+    </Modal>
+  );
+}
+
+const DOC_STATUS: Record<string, [string, string]> = {
+  solicitado: ['Pendiente de subir', 'amber'], recibido: ['Por revisar', 'blue'], en_revision: ['En revisión', 'blue'], aprobado: ['Aprobado', 'green'],
+  requiere_correccion: ['Requiere corrección', 'red'], rechazado: ['Rechazado', 'red'], vencido: ['Vencido', 'red'],
+};
+
+function DocumentsCard({ appId, docs, onChange }: { appId: string; docs: any[]; onChange: () => void }) {
+  const { can, catalogs } = useAdmin();
+  const [requesting, setRequesting] = useState(false);
+  const [sel, setSel] = useState<string[]>([]);
+  const [reviewing, setReviewing] = useState<any>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const already = new Set(docs.filter((d) => !['rechazado', 'vencido'].includes(d.status)).map((d) => d.type_id));
+  return (
+    <Card title={`Documentos (${docs.filter((d) => d.status === 'aprobado').length}/${docs.length} aprobados)`} actions={can('documents.review') && <Button size="sm" variant="ghost" onClick={() => { setSel([]); setRequesting(true); }}>Solicitar documentos</Button>}>
+      {!docs.length ? <p className="text-sm text-slate-500">No se han solicitado documentos. Se solicitan automáticamente al pasar a "Documentación pendiente", o manualmente aquí.</p> : (
+        <ul className="divide-y divide-slate-100">{docs.map((d) => {
+          const [label, tone] = DOC_STATUS[d.status] ?? [d.status, 'gray'];
+          return (
+            <li key={d.id} className="flex flex-wrap items-start justify-between gap-2 py-2 text-sm">
+              <div>
+                <p className="font-medium">{d.name} <Badge tone={tone}>{label}</Badge></p>
+                <p className="text-xs text-slate-500">Solicitado {fmtDateTime(d.requested_at)}{d.received_at ? ` · recibido ${fmtDateTime(d.received_at)}` : ''}{d.reviewed_by_name ? ` · revisó ${d.reviewed_by_name}` : ''}{d.expires_at ? ` · vence ${String(d.expires_at).slice(0, 10)}` : ''}</p>
+                {d.rejection_reason && <p className="text-xs text-red-700">Motivo: {d.rejection_reason}</p>}
+                {can('documents.read') && d.files?.length > 0 && (
+                  <p className="text-xs">{d.files.map((f: any) => <a key={f.version} className="mr-3 text-brand-700 underline" href={`/api/admin/documents/${d.id}/file?version=${f.version}`} target="_blank" rel="noreferrer">v{f.version} · {f.filename} ({Math.ceil(f.size / 1024)} KB)</a>)}</p>
+                )}
+              </div>
+              {can('documents.review') && ['recibido', 'en_revision'].includes(d.status) && <Button size="sm" variant="secondary" onClick={() => setReviewing(d)}>Revisar</Button>}
+            </li>
+          );
+        })}</ul>
+      )}
+      <Modal open={requesting} title="Solicitar documentos" onClose={() => setRequesting(false)}>
+        <div className="space-y-2">
+          {catalogs.documentTypes.map((t) => (
+            <label key={t.id} className={`flex items-center gap-2 text-sm ${already.has(t.id) ? 'text-slate-400' : ''}`}>
+              <input type="checkbox" disabled={already.has(t.id)} checked={sel.includes(t.id)} onChange={(e) => setSel(e.target.checked ? [...sel, t.id] : sel.filter((x) => x !== t.id))} />{t.name}{already.has(t.id) && ' (ya solicitado)'}
+            </label>
+          ))}
+          <Notice>El candidato verá los documentos en su portal y se registrará un aviso en la bandeja de mensajes.</Notice>
+          <ErrorBox error={err} />
+          <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setRequesting(false)}>Cancelar</Button><Button disabled={!sel.length} onClick={async () => {
+            try { await api(`/api/admin/applications/${appId}/documents`, { body: { documentTypeIds: sel } }); setRequesting(false); onChange(); } catch (e: any) { setErr(e.message); }
+          }}>Solicitar</Button></div>
+        </div>
+      </Modal>
+      {reviewing && <ReviewDialog d={reviewing} onClose={() => setReviewing(null)} onDone={() => { setReviewing(null); onChange(); }} />}
+    </Card>
+  );
+}
+
+function ReviewDialog({ d, onClose, onDone }: { d: any; onClose: () => void; onDone: () => void }) {
+  const [status, setStatus] = useState('aprobado');
+  const [reason, setReason] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+  return (
+    <Modal open title={`Revisar: ${d.name}`} onClose={onClose}>
+      <div className="space-y-3">
+        <p className="text-sm"><a className="font-semibold text-brand-700 underline" href={`/api/admin/documents/${d.id}/file`} target="_blank" rel="noreferrer">Abrir PDF (versión {d.current_version})</a></p>
+        <Field label="Resultado"><Select value={status} onChange={(e) => setStatus(e.target.value)}><option value="aprobado">Aprobado</option><option value="requiere_correccion">Requiere corrección (el candidato puede volver a subirlo)</option><option value="rechazado">Rechazado</option></Select></Field>
+        {status !== 'aprobado' && <Field label="Mensaje para el candidato" required><Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="p. ej. La imagen está borrosa, falta el reverso" /></Field>}
+        {status === 'aprobado' && d.has_expiry && <Field label="Fecha de vencimiento del documento (opcional)"><Input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} /></Field>}
+        <ErrorBox error={err} />
+        <div className="flex justify-end gap-2"><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button onClick={async () => {
+          try { await api(`/api/admin/documents/${d.id}/review`, { body: { status, reason: reason || undefined, expiresAt: expiresAt || undefined } }); onDone(); } catch (e: any) { setErr(e.message); }
+        }}>Guardar</Button></div>
       </div>
     </Modal>
   );

@@ -35,6 +35,8 @@ Todas validan que la postulación o cita pertenezca al candidato de la sesión (
 | POST | `/portal/interviews/:id/confirm` | Confirma asistencia |
 | POST | `/portal/interviews/:id/cancel` | `{reason}` |
 | POST | `/portal/applications/:id/withdraw` | Retiro voluntario |
+| POST | `/portal/documents/:id/file` | Sube PDF (multipart, campo `file`, máx. 5 MB, se valida la firma `%PDF-`) |
+| GET | `/portal/documents/:id/file` | El candidato consulta su propio archivo |
 | POST | `/portal/help` | `{applicationId?, topic, message}` crea tarea de incidencia |
 
 ## Panel (cookie `staff_sid` + CSRF)
@@ -56,6 +58,9 @@ Todas validan que la postulación o cita pertenezca al candidato de la sesión (
 | POST | `/admin/applications/bulk-move` | application.move |
 | POST | `/admin/applications/:id/assign` | application.assign |
 | POST | `/admin/applications/:id/notes` `{body, kind: nota|contacto, contactOutcome?}` | note.write |
+| POST | `/admin/applications/:id/documents` `{documentTypeIds}` | documents.review |
+| GET | `/admin/documents/:id/file?version=` (auditado) | documents.read |
+| POST | `/admin/documents/:id/review` `{status: aprobado|requiere_correccion|rechazado, reason?, expiresAt?}` | documents.review |
 | GET/POST/PATCH | `/admin/tasks` · `/admin/tasks/:id` | application.read / task.manage |
 | GET | `/admin/agenda?from&to&interviewerId` | sesión (entrevistador: solo lo suyo) |
 | POST/DELETE | `/admin/slots` · `/admin/slots/:id` | schedule.manage |

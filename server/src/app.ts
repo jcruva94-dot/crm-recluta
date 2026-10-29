@@ -1,6 +1,8 @@
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import cookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
+import multipart from '@fastify/multipart';
+import { MAX_PDF_BYTES } from './modules/documents.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ZodError, type ZodTypeAny, type z } from 'zod';
@@ -74,11 +76,13 @@ export function cookieOpts(maxAgeSec: number, sameSite: 'strict' | 'lax') {
 export async function buildApp(opts: { logger?: boolean } = {}) {
   const app = Fastify({ logger: opts.logger ? { redact: ['req.headers.cookie', 'req.headers["x-csrf-token"]'] } : false, trustProxy: true, bodyLimit: 1_000_000 });
   await app.register(cookie);
+  await app.register(multipart, { limits: { fileSize: MAX_PDF_BYTES, files: 1, fields: 5, parts: 6 } });
 
   // Cabeceras de seguridad básicas
   app.addHook('onSend', async (_req, reply) => {
     reply.header('X-Content-Type-Options', 'nosniff');
-    reply.header('X-Frame-Options', 'DENY');
+    // En producción no se permite incrustar la app; en desarrollo sí (vistas previas como la de Replit)
+    if (config.isProduction) reply.header('X-Frame-Options', 'DENY');
     reply.header('Referrer-Policy', 'same-origin');
   });
 
@@ -104,6 +108,7 @@ export async function buildApp(opts: { logger?: boolean } = {}) {
     if (err.code === '23505') return reply.status(409).send({ error: 'conflicto', message: 'El registro ya existe o entra en conflicto con otro' });
     if (err.code === '23P01') return reply.status(409).send({ error: 'conflicto', message: 'El horario se traslapa con otro del mismo entrevistador' });
     if (err.code === '23514' || err.code === '22P02' || err.code === '23503') return reply.status(400).send({ error: 'solicitud_invalida', message: 'Datos no válidos' });
+    if (err.statusCode === 413 || err.code === 'FST_REQ_FILE_TOO_LARGE') return reply.status(413).send({ error: 'archivo_grande', message: 'El archivo pesa más de 5 MB. Reduce su tamaño e inténtalo de nuevo.' });
     if (err.statusCode && err.statusCode < 500) return reply.status(err.statusCode).send({ error: 'solicitud_invalida', message: err.message });
     req.log.error(err);
     return reply.status(500).send({ error: 'error_interno', message: 'Ocurrió un error inesperado. Intenta de nuevo.' });

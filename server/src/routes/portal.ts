@@ -10,6 +10,14 @@ import { CANDIDATE_STATUS, CANDIDATE_STEPS, moveStage } from '../modules/pipelin
 import { evaluate, validateAnswer, type Question } from '../modules/prequal-engine.js';
 import { availableSlots, book, cancelInterview, reschedule } from '../modules/scheduling.js';
 import { messageCandidate, notifyUser } from '../modules/messaging.js';
+import { CANDIDATE_CAN_UPLOAD, DOC_STATUS_LABEL, listDocuments, storeUpload } from '../modules/documents.js';
+
+async function ownDocument(db: Db, candidateId: string, documentId: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(documentId)) throw notFound('Documento no encontrado');
+  const d = await one(db, `select d.* from application_documents d join applications a on a.id = d.application_id where d.id = $1 and a.candidate_id = $2 and d.status <> 'no_solicitado'`, [documentId, candidateId]);
+  if (!d) throw notFound('Documento no encontrado');
+  return d;
+}
 
 /** Carga la postulación SOLO si pertenece al candidato de la sesión (evita IDOR). */
 async function ownApplication(db: Db, candidateId: string, applicationId: string, lock = false) {
@@ -67,12 +75,18 @@ async function applicationView(db: Db, app: any) {
   const closed = ['cerrado', 'reserva'].includes(stage.category);
   const hasConsent = !!(await one(db, `select 1 from consents k join privacy_notices n on n.id = k.notice_id and n.is_current where k.candidate_id = $1 and k.purpose = 'aviso_privacidad' and k.granted`, [app.candidate_id]));
   const reschedules = interviews.filter((i) => i.status === 'reprogramada').length;
+  const documents = (await listDocuments(db, app.id)).map((d) => ({
+    id: d.id, name: d.name, instructions: d.instructions, status: d.status, statusLabel: DOC_STATUS_LABEL[d.status],
+    correction: ['requiere_correccion', 'rechazado'].includes(d.status) ? d.rejection_reason : null,
+    canUpload: !closed && CANDIDATE_CAN_UPLOAD.includes(d.status), file: d.files?.[0] ?? null,
+  }));
   // Siguiente acción para el candidato
   let nextStep: string | null = null;
   if (app.stage_code === 'registro_iniciado') nextStep = 'registro';
   else if (app.stage_code === 'precalificacion_pendiente') nextStep = 'precalificacion';
   else if (app.stage_code === 'contacto_pendiente') nextStep = 'agendar';
   else if (app.stage_code === 'entrevista_agendada') nextStep = 'cita';
+  else if (documents.some((d) => d.canUpload)) nextStep = 'documentos';
   return {
     id: app.id,
     vacancy: v,
@@ -84,6 +98,7 @@ async function applicationView(db: Db, app: any) {
     questions: app.stage_code === 'precalificacion_pendiente' || app.stage_code === 'registro_iniciado' ? questions.map(publicQuestion) : [],
     answers: app.stage_code === 'precalificacion_pendiente' ? answers : {},
     interviews: interviews.filter((i) => i.status !== 'reprogramada'),
+    documents,
     canReschedule: reschedules < 3,
     createdAt: app.created_at,
   };
@@ -94,11 +109,11 @@ export async function portalRoutes(app: FastifyInstance) {
     const cid = requireCandidate(req);
     const c = await one(pool, 'select id, first_name, last_name, phone_e164, email, phone_verified_at, email_verified_at, preferred_channel, do_not_contact, city from candidates where id = $1', [cid]);
     const apps = await many(pool,
-      `select a.id, a.stage_code, a.created_at, v.title, ps.category from applications a join vacancies v on v.id = a.vacancy_id join pipeline_stages ps on ps.code = a.stage_code
+      `select a.id, a.vacancy_id, a.stage_code, a.created_at, v.title, ps.category from applications a join vacancies v on v.id = a.vacancy_id join pipeline_stages ps on ps.code = a.stage_code
         where a.candidate_id = $1 order by a.created_at desc`, [cid]);
     return {
       candidate: c,
-      applications: apps.map((a) => ({ id: a.id, title: a.title, createdAt: a.created_at, status: CANDIDATE_STATUS[a.stage_code]?.title ?? 'En proceso', closed: a.category !== 'activo' && a.category !== 'contratado' })),
+      applications: apps.map((a) => ({ id: a.id, vacancyId: a.vacancy_id, title: a.title, createdAt: a.created_at, status: CANDIDATE_STATUS[a.stage_code]?.title ?? 'En proceso', closed: a.category !== 'activo' && a.category !== 'contratado' })),
     };
   });
 
@@ -290,6 +305,28 @@ export async function portalRoutes(app: FastifyInstance) {
       await moveStage(c, a.id, 'retirado', { actor: { type: 'candidate', id: cid, ip: req.ip }, closureReasonId: reason.id, reason: b.reason || 'Retiro desde el portal' });
     });
     return applicationView(pool, await ownApplication(pool, cid, (req.params as any).id));
+  });
+
+  /** Carga de documento en PDF (multipart, campo "file"). */
+  app.post('/documents/:id/file', async (req) => {
+    const cid = requireCandidate(req);
+    const d = await ownDocument(pool, cid, (req.params as any).id);
+    if (!req.isMultipart()) throw badRequest('Envía el archivo como formulario');
+    const file = await req.file();
+    if (!file) throw badRequest('Selecciona un archivo PDF');
+    const buf = await file.toBuffer();
+    const r = await tx((c) => storeUpload(c, d.id, buf, file.filename, cid));
+    return { ok: true, version: r.version, application: await applicationView(pool, await ownApplication(pool, cid, d.application_id)) };
+  });
+
+  /** El candidato puede consultar el archivo que él mismo subió. */
+  app.get('/documents/:id/file', async (req, reply) => {
+    const cid = requireCandidate(req);
+    const d = await ownDocument(pool, cid, (req.params as any).id);
+    const f = await one(pool, 'select filename, content from document_files where document_id = $1 and version = $2', [d.id, d.current_version]);
+    if (!f) throw notFound('Aún no has subido este documento');
+    reply.header('content-type', 'application/pdf').header('content-disposition', `inline; filename="${f.filename}"`).header('cache-control', 'private, no-store');
+    return reply.send(f.content);
   });
 
   app.post('/help', async (req) => {

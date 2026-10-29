@@ -12,6 +12,7 @@ import { moveStage } from '../modules/pipeline.js';
 import { protectedTopic } from '../modules/prequal-engine.js';
 import { notifyUser } from '../modules/messaging.js';
 import { config } from '../config.js';
+import { listDocuments, requestDocuments, reviewDocument } from '../modules/documents.js';
 
 const uuid = z.string().uuid();
 const actorOf = (u: StaffUser, req: FastifyRequest) => ({ type: 'user' as const, id: u.id, ip: req.ip });
@@ -92,6 +93,7 @@ const vacancySchema = z.object({
   assignmentStrategy: z.enum(['menor_carga', 'rotativa']).default('menor_carga'),
   interviewDurationMin: z.number().int().min(10).max(240).default(30),
   recruiterIds: z.array(uuid).max(50).default([]),
+  documentTypeIds: z.array(uuid).max(30).default([]),
 }).refine((v) => v.thresholdObservations <= v.thresholdCompatible, { path: ['thresholdObservations'], message: 'Debe ser menor o igual al umbral compatible' });
 
 function slugify(s: string) {
@@ -123,6 +125,8 @@ async function saveVacancy(c: Db, data: z.infer<typeof vacancySchema>, id: strin
   }
   await c.query('delete from vacancy_recruiters where vacancy_id = $1', [vid]);
   for (const r of data.recruiterIds) await c.query('insert into vacancy_recruiters(vacancy_id, user_id) values ($1,$2) on conflict do nothing', [vid, r]);
+  await c.query('delete from vacancy_document_types where vacancy_id = $1', [vid]);
+  for (const d of data.documentTypeIds) await c.query('insert into vacancy_document_types(vacancy_id, document_type_id) values ($1,$2) on conflict do nothing', [vid, d]);
   return vid!;
 }
 
@@ -188,7 +192,8 @@ export async function adminRoutes(app: FastifyInstance) {
       many(pool, 'select id, stage_code, name from closure_reasons where is_active order by name'),
       many(pool, 'select from_code, to_code from stage_transitions'),
     ]);
-    return { clients, campaigns, sites, sources, stages, users, teams, closureReasons: reasons, transitions };
+    const documentTypes = await many(pool, 'select id, code, name, instructions, has_expiry from document_types where is_active order by position');
+    return { clients, campaigns, sites, sources, stages, users, teams, closureReasons: reasons, transitions, documentTypes };
   });
 
   const simpleCatalog = (path: string, table: string, schema: z.ZodTypeAny, cols: string[]) => {
@@ -225,6 +230,7 @@ export async function adminRoutes(app: FastifyInstance) {
   app.get('/vacancies/:id', async (req) => {
     const u = requireStaff(req, 'vacancy.read');
     const v = await scopedVacancy(pool, u, (req.params as any).id);
+    const docTypes = await many(pool, 'select document_type_id from vacancy_document_types where vacancy_id = $1', [(req.params as any).id]);
     const [questions, links, recruiters] = await Promise.all([
       many(pool, 'select * from prequal_questions where vacancy_id = $1 order by is_active desc, position, created_at', [v.id]),
       many(pool, `select l.*, s.name source_name, r.full_name recruiter_name,
@@ -233,7 +239,7 @@ export async function adminRoutes(app: FastifyInstance) {
                   from tracking_links l join sources s on s.id = l.source_id left join users r on r.id = l.recruiter_id where l.vacancy_id = $1 order by l.created_at desc`, [v.id]),
       many(pool, 'select user_id from vacancy_recruiters where vacancy_id = $1', [v.id]),
     ]);
-    return { vacancy: { ...v, recruiter_ids: recruiters.map((r) => r.user_id) }, questions, links: links.map((l) => ({ ...l, url: `${config.publicBaseUrl}/empleo/l/${l.code}` })) };
+    return { vacancy: { ...v, recruiter_ids: recruiters.map((r) => r.user_id), document_type_ids: docTypes.map((d) => d.document_type_id) }, questions, links: links.map((l) => ({ ...l, url: `${config.publicBaseUrl}/empleo/l/${l.code}` })) };
   });
 
   app.post('/vacancies', async (req) => {
@@ -420,6 +426,7 @@ export async function adminRoutes(app: FastifyInstance) {
       one(pool, `select s1.name first_source, s2.name last_source, l.code link_code, l.event_name from applications a left join sources s1 on s1.id = a.first_source_id left join sources s2 on s2.id = a.last_source_id left join tracking_links l on l.id = a.link_id where a.id = $1`, [a.id]),
     ]);
     const recruiter = a.recruiter_id ? await one(pool, 'select id, full_name from users where id = $1', [a.recruiter_id]) : null;
+    const documents = u.role === 'entrevistador' ? [] : await listDocuments(pool, a.id);
     await audit(pool, actorOf(u, req), 'application.view', 'application', a.id);
     const isInterviewer = u.role === 'entrevistador';
     return {
@@ -434,6 +441,7 @@ export async function adminRoutes(app: FastifyInstance) {
       otherApplications: isInterviewer ? [] : otherApps,
       consents: isInterviewer ? [] : consents,
       duplicates: isInterviewer ? [] : duplicates,
+      documents,
     };
   });
 
@@ -508,6 +516,44 @@ export async function adminRoutes(app: FastifyInstance) {
       return n;
     });
     return n;
+  });
+
+  // ---------- Documentos ----------
+  app.post('/applications/:id/documents', async (req) => {
+    const u = requireStaff(req, 'documents.review');
+    const b = parse(z.object({ documentTypeIds: z.array(uuid).min(1).max(30) }), req.body);
+    const n = await tx(async (c) => {
+      const a = await scopedApplication(c, u, (req.params as any).id, true);
+      return requestDocuments(c, a.id, b.documentTypeIds, actorOf(u, req));
+    });
+    return { requested: n };
+  });
+
+  async function scopedDocument(u: StaffUser, id: string) {
+    if (!uuid.safeParse(id).success) throw notFound('Documento no encontrado');
+    const d = await one(pool, 'select * from application_documents where id = $1', [id]);
+    if (!d) throw notFound('Documento no encontrado');
+    await scopedApplication(pool, u, d.application_id);
+    return d;
+  }
+
+  /** Descarga protegida: requiere permiso, alcance sobre la postulación y queda en auditoría. */
+  app.get('/documents/:id/file', async (req, reply) => {
+    const u = requireStaff(req, 'documents.read');
+    const d = await scopedDocument(u, (req.params as any).id);
+    const { version } = parse(z.object({ version: z.coerce.number().int().min(1).optional() }), req.query);
+    const f = await one(pool, 'select filename, content, version from document_files where document_id = $1 and version = $2', [d.id, version ?? d.current_version]);
+    if (!f) throw notFound('Archivo no encontrado');
+    await audit(pool, actorOf(u, req), 'document.download', 'application', d.application_id, { documentId: d.id, version: f.version });
+    reply.header('content-type', 'application/pdf').header('content-disposition', `inline; filename="${f.filename}"`).header('cache-control', 'private, no-store');
+    return reply.send(f.content);
+  });
+
+  app.post('/documents/:id/review', async (req) => {
+    const u = requireStaff(req, 'documents.review');
+    const b = parse(z.object({ status: z.enum(['aprobado', 'requiere_correccion', 'rechazado']), reason: z.string().trim().max(500).optional(), expiresAt: z.string().date().optional() }), req.body);
+    const d = await scopedDocument(u, (req.params as any).id);
+    return tx((c) => reviewDocument(c, d.id, b.status, b.reason, b.expiresAt, actorOf(u, req)));
   });
 
   // ---------- Tareas ----------

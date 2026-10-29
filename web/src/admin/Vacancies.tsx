@@ -85,6 +85,7 @@ function VacancyForm({ v, editable, onSaved, recruiters }: { v: any; editable: b
     salaryText: v?.salary_text ?? '', scheduleText: v?.schedule_text ?? '', benefits: (v?.benefits ?? []).join('\n'), processSteps: (v?.process_steps ?? []).join('\n'), responseTimeText: v?.response_time_text ?? '',
     priority: v?.priority ?? 'media', thresholdCompatible: v?.threshold_compatible ?? 70, thresholdObservations: v?.threshold_observations ?? 50, assignmentStrategy: v?.assignment_strategy ?? 'menor_carga',
     interviewDurationMin: v?.interview_duration_min ?? 30, recruiterIds: (v?.recruiter_ids ?? []) as string[],
+    documentTypeIds: (v?.document_type_ids ?? []) as string[],
   }));
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
@@ -139,6 +140,11 @@ function VacancyForm({ v, editable, onSaved, recruiters }: { v: any; editable: b
           <fieldset className="mt-3"><legend className="text-sm font-medium text-slate-700">Reclutadores asignados</legend>
             <div className="mt-1 grid gap-1 sm:grid-cols-2">{recruiters.map((u) => (
               <label key={u.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.recruiterIds.includes(u.id)} onChange={(e) => setF({ ...f, recruiterIds: e.target.checked ? [...f.recruiterIds, u.id] : f.recruiterIds.filter((x) => x !== u.id) })} />{u.full_name}</label>
+            ))}</div>
+          </fieldset>
+          <fieldset className="mt-3"><legend className="text-sm font-medium text-slate-700">Documentos que se solicitan al llegar a "Documentación pendiente"</legend>
+            <div className="mt-1 grid gap-1 sm:grid-cols-2">{catalogs.documentTypes.map((t) => (
+              <label key={t.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.documentTypeIds.includes(t.id)} onChange={(e) => setF({ ...f, documentTypeIds: e.target.checked ? [...f.documentTypeIds, t.id] : f.documentTypeIds.filter((x) => x !== t.id) })} />{t.name}</label>
             ))}</div>
           </fieldset>
         </Card>

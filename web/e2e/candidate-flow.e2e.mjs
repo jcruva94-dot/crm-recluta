@@ -145,6 +145,13 @@ try {
     await page.screenshot({ path: `${OUT}/08-portal.png`, fullPage: true });
   });
 
+  await step('El candidato abre de nuevo la liga y ve su estatus (no un registro nuevo)', async () => {
+    await page.goto(`${BASE}/empleo/l/ventas-fb`);
+    await page.getByTestId('existing-status').getByText('Estatus: Entrevista agendada').waitFor();
+    if (await page.getByRole('button', { name: 'Postularme' }).count()) throw new Error('Se ofreció postularse otra vez');
+    await page.screenshot({ path: `${OUT}/09-liga-estatus.png`, fullPage: true });
+  });
+
   await step('Continuar más tarde desde otro dispositivo (login sin contraseña)', async () => {
     const other = await browser.newContext({ ...devices['iPhone 13'], locale: 'es-MX' });
     const p2 = await other.newPage();
@@ -184,6 +191,35 @@ try {
     await admin.getByText('La puntuación orienta, no decide').waitFor();
     await admin.getByText('Solicitud de ayuda').first().waitFor();
     await admin.screenshot({ path: `${OUT}/12-ficha.png`, fullPage: true });
+  });
+
+  await step('Admin: solicitar documentos desde la ficha', async () => {
+    await admin.getByRole('button', { name: 'Solicitar documentos' }).click();
+    await admin.getByLabel('Identificación oficial (INE)').check();
+    await admin.getByLabel('CURP', { exact: true }).check();
+    await admin.getByRole('button', { name: 'Solicitar', exact: true }).click();
+    await admin.getByText('Pendiente de subir').first().waitFor();
+  });
+
+  await step('Candidato: sube un PDF desde el celular; un archivo no PDF se rechaza', async () => {
+    await page.goto(appUrl);
+    const rows = page.getByTestId('document-row');
+    await rows.first().waitFor();
+    const pdf = Buffer.from('%PDF-1.4\n% INE de prueba E2E\n%%EOF\n');
+    await page.getByLabel('Subir Identificación oficial (INE)').setInputFiles({ name: 'ine.pdf', mimeType: 'application/pdf', buffer: pdf });
+    await page.getByText('Recibido, en revisión').waitFor();
+    await page.getByLabel('Subir CURP').setInputFiles({ name: 'curp.pdf', mimeType: 'application/pdf', buffer: Buffer.from('esto no es un pdf') });
+    await page.getByText('no es un PDF válido').waitFor();
+    await noHorizontalScroll(page);
+    await page.screenshot({ path: `${OUT}/14-documentos-candidato.png`, fullPage: true });
+  });
+
+  await step('Admin: revisa y aprueba el documento', async () => {
+    await admin.reload();
+    await admin.getByRole('button', { name: 'Revisar' }).click();
+    await admin.getByRole('dialog').getByRole('button', { name: 'Guardar' }).click();
+    await admin.getByText('Aprobado', { exact: true }).waitFor();
+    await admin.screenshot({ path: `${OUT}/15-documentos-admin.png`, fullPage: true });
   });
 
   await step('Admin: transición inválida no se ofrece y el cambio válido queda en historial', async () => {

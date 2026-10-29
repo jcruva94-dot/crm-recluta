@@ -9,15 +9,15 @@ Todas las pruebas se ejecutaron contra una base PostgreSQL real (sin mocks de ba
 |---|---|
 | Typecheck backend (`tsc --noEmit`) | OK |
 | Typecheck + build frontend (`tsc -b && vite build`) | OK |
-| API e integración (Vitest, 5 archivos) | **45 / 45 pasan** |
-| E2E en navegador (Chromium, viewport Pixel 7 y escritorio) | **16 / 16 pasos pasan** |
+| API e integración (Vitest, 6 archivos) | **50 / 50 pasan** |
+| E2E en navegador (Chromium, viewport Pixel 7 y escritorio) | **20 / 20 pasos pasan** |
 
 Defecto real encontrado por las pruebas y corregido: el bloqueo de cuenta tras 5 intentos fallidos no se activaba (`auth.ts`). También se corrigió que, tras recompilar el frontend sin reiniciar, el servidor devolvía HTML para archivos `/assets` nuevos.
 
 ## Qué NO se probó
 
 - Envío real de SMS/WhatsApp/correo (no hay proveedor configurado; los mensajes quedan como *simulados*).
-- Carga de documentos, ofertas, contratación y onboarding (módulos aún no construidos).
+- Ofertas, contratación y onboarding (módulos aún no construidos). Documentos: probados con PDFs sintéticos; no se probó con escaneos reales pesados ni antivirus.
 - Pruebas de carga/volumen y recuperación ante caída de base de datos.
 - Auditoría de accesibilidad automatizada (axe); se verificó navegación por etiquetas/roles en E2E y ausencia de scroll horizontal en móvil.
 - Navegadores Safari/Firefox reales.
@@ -35,14 +35,18 @@ Defecto real encontrado por las pruebas y corregido: el bloqueo de cuenta tras 5
 ✓ 9. Agendar una entrevista
 ✓ 10. Reprogramar la entrevista
 ✓ 12. Consultar estado en el portal y pedir ayuda
+✓ El candidato abre de nuevo la liga y ve su estatus (no un registro nuevo)
 ✓ Continuar más tarde desde otro dispositivo (login sin contraseña)
 ✓ Admin: login y dashboard con datos reales
 ✓ Admin: el candidato aparece en el pipeline (Kanban) y la ficha muestra la explicación
+✓ Admin: solicitar documentos desde la ficha
+✓ Candidato: sube un PDF desde el celular; un archivo no PDF se rechaza
+✓ Admin: revisa y aprueba el documento
 ✓ Admin: transición inválida no se ofrece y el cambio válido queda en historial
 ✓ Admin: un reclutador no puede abrir la auditoría (403 del servidor)
 ✓ Admin (gerente): mensajes marcados como simulados (no enviados)
 
-16/16 pasos OK
+20/20 pasos OK
 ```
 
 Capturas en `docs/capturas/`.
@@ -50,7 +54,7 @@ Capturas en `docs/capturas/`.
 ## API e integración (detalle)
 
 ```
- ✓ test/permissions.test.ts > seguridad y permisos > un candidato no puede ver ni modificar la postulación de otro (IDOR)
+✓ test/permissions.test.ts > seguridad y permisos > un candidato no puede ver ni modificar la postulación de otro (IDOR)
  ✓ test/permissions.test.ts > seguridad y permisos > un candidato no puede manipular la cita de otro
  ✓ test/permissions.test.ts > seguridad y permisos > las peticiones que modifican datos exigen cabecera anti-CSRF
  ✓ test/permissions.test.ts > seguridad y permisos > login de staff: credenciales incorrectas y bloqueo tras 5 intentos
@@ -70,6 +74,11 @@ Capturas en `docs/capturas/`.
  ✓ test/pipeline-schedule.test.ts > agenda > la base de datos impide horarios traslapados del mismo entrevistador
  ✓ test/pipeline-schedule.test.ts > agenda > inasistencia: ruta de recuperación y reagenda; asistencia avanza la etapa
  ✓ test/pipeline-schedule.test.ts > agenda > notificaciones con clave de idempotencia no se duplican
+ ✓ test/documents.test.ts > documentos en PDF > flujo completo: solicitar → subir PDF → corrección → nueva versión → aprobar
+ ✓ test/documents.test.ts > documentos en PDF > rechaza archivos que no son PDF real y archivos de más de 5 MB
+ ✓ test/documents.test.ts > documentos en PDF > nadie fuera del expediente puede subir ni descargar
+ ✓ test/documents.test.ts > documentos en PDF > al pasar a "Documentación pendiente" se solicitan los documentos de la vacante
+ ✓ test/documents.test.ts > documentos en PDF > el portal informa la vacante de cada postulación (para mostrar el estatus en la liga)
  ✓ test/candidate-flow.test.ts > flujo del candidato (extremo a extremo vía API) > liga → registro → OTP → aviso → precalificación → agenda → reprogramación → confirmación
  ✓ test/candidate-flow.test.ts > flujo del candidato (extremo a extremo vía API) > candidato que no cumple un indispensable va a revisión humana (no se rechaza solo)
  ✓ test/candidate-flow.test.ts > flujo del candidato (extremo a extremo vía API) > el OTP se valida en el backend: código incorrecto, intentos máximos y vencimiento
@@ -95,6 +104,6 @@ Capturas en `docs/capturas/`.
  ✓ test/prequal-engine.test.ts > motor de precalificación > es determinista (explicable y auditable)
  ✓ test/prequal-engine.test.ts > motor de precalificación > valida respuestas
  ✓ test/prequal-engine.test.ts > motor de precalificación > detecta temas protegidos y permite "mayor de edad"
- Test Files  5 passed (5)
-      Tests  45 passed (45)
+ Test Files  6 passed (6)
+      Tests  50 passed (50)
 ```

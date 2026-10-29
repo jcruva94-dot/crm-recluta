@@ -85,4 +85,13 @@ export async function compatibleCandidate(link = 'ventas-fb') {
   return { ...c, view: sub.body };
 }
 
+/** Construye un cuerpo multipart con un solo archivo. */
+export function multipart(filename: string, content: Buffer, mime = 'application/pdf') {
+  const boundary = '----crmtest' + Math.random().toString(16).slice(2);
+  const head = Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: ${mime}\r\n\r\n`);
+  const tail = Buffer.from(`\r\n--${boundary}--\r\n`);
+  return { body: Buffer.concat([head, content, tail]), headers: { 'content-type': `multipart/form-data; boundary=${boundary}` } };
+}
+export const fakePdf = (extra = '') => Buffer.from(`%PDF-1.4\n% documento de prueba ${extra}\n%%EOF\n`);
+
 export { pool };

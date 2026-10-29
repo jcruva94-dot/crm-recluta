@@ -85,6 +85,8 @@ export async function seedBase() {
         ['Registro en línea (5 min)', 'Preguntas rápidas', 'Entrevista con reclutamiento', 'Evaluación de habilidades', 'Documentación', 'Capacitación e ingreso'],
         users['gerente@demo.test']])).id;
     for (const r of ['reclutador1@demo.test', 'reclutador2@demo.test']) await q('insert into vacancy_recruiters values ($1,$2)', [v, users[r]]);
+    await q(`insert into vacancy_document_types(vacancy_id, document_type_id) select $1, id from document_types
+             where code in ('ine','curp','comprobante_domicilio','nss','comprobante_estudios') on conflict do nothing`, [v]);
 
     const questions = [
       { text: '¿Eres mayor de edad?', type: 'yes_no', weight: 0, ko: true, msg: 'La vacante requiere ser mayor de edad por disposición legal', just: 'Requisito legal para contratación laboral en este puesto (LFT).', options: [{ value: 'si', label: 'Sí', score: 100 }, { value: 'no', label: 'No', score: 0, knockout: true }] },

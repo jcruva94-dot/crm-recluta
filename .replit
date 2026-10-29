@@ -1,0 +1,12 @@
+# Configuración para Replit (ambiente de DEMO, mensajería en modo de pruebas)
+modules = ["nodejs-22"]
+run = "npm install && npm run build && npm run db:seed && npm start"
+
+[env]
+DELIVERY_MODE = "sandbox"
+EXPOSE_DEV_OTP = "true"
+APP_TIMEZONE = "America/Mexico_City"
+
+[[ports]]
+localPort = 3000
+externalPort = 80

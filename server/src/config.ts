@@ -14,7 +14,7 @@ export const config = {
     ? env.TEST_DATABASE_URL ?? 'postgres://crm:crm_dev@localhost:5432/crm_recluta_test'
     : env.DATABASE_URL ?? 'postgres://crm:crm_dev@localhost:5432/crm_recluta',
   // En Render se usa la URL pública que asigna la plataforma
-  publicBaseUrl: env.PUBLIC_BASE_URL ?? env.RENDER_EXTERNAL_URL ?? 'http://localhost:5173',
+  publicBaseUrl: env.PUBLIC_BASE_URL ?? env.RENDER_EXTERNAL_URL ?? (env.REPLIT_DEV_DOMAIN ? `https://${env.REPLIT_DEV_DOMAIN}` : 'http://localhost:5173'),
   otpSecret: env.OTP_SECRET ?? (env.NODE_ENV === 'production' ? '' : 'dev-only-otp-secret'),
   deliveryMode: env.DELIVERY_MODE ?? 'sandbox',
   // Solo se expone el código OTP en sandbox y nunca en producción.

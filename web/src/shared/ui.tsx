@@ -4,14 +4,14 @@ const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).jo
 
 export function Button({ variant = 'primary', size = 'md', loading, className, children, ...p }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' | 'danger'; size?: 'sm' | 'md' | 'lg'; loading?: boolean }) {
   const v = {
-    primary: 'bg-brand-700 text-white hover:bg-brand-600 disabled:bg-slate-300',
-    secondary: 'bg-white text-slate-800 border border-slate-300 hover:bg-slate-50 disabled:text-slate-400',
+    primary: 'bg-linear-to-r from-brand-600 to-violet-600 text-white shadow-md shadow-brand-600/25 hover:shadow-lg hover:shadow-brand-600/30 hover:brightness-110 active:scale-[0.99] disabled:from-slate-300 disabled:to-slate-300 disabled:shadow-none',
+    secondary: 'bg-white text-slate-800 border border-slate-200 shadow-sm hover:border-brand-200 hover:bg-brand-50/40 disabled:text-slate-400',
     ghost: 'text-brand-700 hover:bg-brand-50 disabled:text-slate-400',
     danger: 'bg-white text-red-700 border border-red-300 hover:bg-red-50',
   }[variant];
-  const s = { sm: 'px-2.5 py-1.5 text-sm', md: 'px-4 py-2 text-sm', lg: 'px-5 py-3.5 text-base w-full' }[size];
+  const s = { sm: 'px-3 py-1.5 text-sm', md: 'px-4 py-2.5 text-sm', lg: 'px-5 py-4 text-base w-full rounded-2xl' }[size];
   return (
-    <button {...p} disabled={p.disabled || loading} className={cx('inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition disabled:cursor-not-allowed', v, s, className)}>
+    <button {...p} disabled={p.disabled || loading} className={cx('inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition duration-150 disabled:cursor-not-allowed', v, s, className)}>
       {loading && <Spinner small />}{children}
     </button>
   );
@@ -29,14 +29,14 @@ export function Field({ label, hint, error, children, required }: { label: strin
 }
 
 const withWidth = (c?: string) => (c && /(^|\s)w-/.test(c) ? '' : 'w-full ');
-const inputCls = 'rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-base sm:text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100';
+const inputCls = 'rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-base sm:text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-100 transition';
 export const Input = (p: InputHTMLAttributes<HTMLInputElement>) => <input {...p} className={cx(withWidth(p.className) + inputCls, p.className)} />;
 export const Select = (p: SelectHTMLAttributes<HTMLSelectElement>) => <select {...p} className={cx(withWidth(p.className) + inputCls, p.className)} />;
 export const Textarea = (p: TextareaHTMLAttributes<HTMLTextAreaElement>) => <textarea {...p} className={cx(withWidth(p.className) + inputCls, p.className)} />;
 
 export const Card = ({ children, className, title, actions }: { children: ReactNode; className?: string; title?: ReactNode; actions?: ReactNode }) => (
-  <section className={cx('rounded-xl border border-slate-200 bg-white p-4 shadow-sm', className)}>
-    {(title || actions) && <div className="mb-3 flex items-center justify-between gap-2"><h2 className="text-base font-semibold text-slate-900">{title}</h2>{actions}</div>}
+  <section className={cx('rounded-2xl border border-slate-200/70 bg-white p-5 shadow-[0_1px_2px_rgb(15_23_42/0.04),0_8px_24px_-12px_rgb(15_23_42/0.10)]', className)}>
+    {(title || actions) && <div className="mb-3 flex items-center justify-between gap-2"><h2 className="text-base font-bold text-slate-900">{title}</h2>{actions}</div>}
     {children}
   </section>
 );
@@ -69,7 +69,7 @@ export const Notice = ({ children, tone = 'blue' }: { children: ReactNode; tone?
 );
 
 export const Empty = ({ title, children }: { title: string; children?: ReactNode }) => (
-  <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
+  <div className="rounded-2xl border border-dashed border-slate-300 bg-white/70 p-8 text-center">
     <p className="font-medium text-slate-700">{title}</p>
     {children && <div className="mt-1 text-sm text-slate-500">{children}</div>}
   </div>
@@ -111,9 +111,9 @@ export function useLoad<T>(fn: () => Promise<T>, deps: unknown[]) {
 
 export function Stat({ label, value, hint, tone }: { label: string; value: ReactNode; hint?: string; tone?: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm" title={hint}>
-      <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
-      <div className={cx('mt-1 text-2xl font-semibold', tone === 'red' ? 'text-red-700' : 'text-slate-900')}>{value}</div>
+    <div className="rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" title={hint}>
+      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+      <div className={cx('mt-1 text-2xl font-bold tabular-nums', tone === 'red' ? 'text-red-700' : 'text-slate-900')}>{value}</div>
       {hint && <div className="mt-1 text-xs text-slate-500 line-clamp-2">{hint}</div>}
     </div>
   );

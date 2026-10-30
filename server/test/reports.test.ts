@@ -23,6 +23,10 @@ describe('indicadores calculados con datos reales', () => {
     const after = (await admin.get(`/api/admin/dashboard?${f}`)).body;
     expect(after.totals.postulaciones - before.postulaciones).toBe(2);
     expect(after.totals.candidatos_unicos - before.candidatos_unicos).toBe(1);
+    // La tendencia diaria cuadra con el total del periodo
+    expect(after.daily).toHaveLength(1);
+    expect(after.daily[0].dia).toBe(today());
+    expect(after.daily[0].postulaciones).toBe(after.totals.postulaciones);
 
     // Llevamos la postulación hasta oferta aceptada por la vía de excepción autorizada
     const g = await staff('gerente@demo.test');

@@ -65,7 +65,7 @@ export async function reportRoutes(app: FastifyInstance) {
       from applications a where ${where.join(' and ')})`;
 
     const totals = await one(pool, `${cohort}
-      select count(*)::int postulaciones, count(distinct candidate_id)::int candidatos_unicos,
+      select count(*)::int postulaciones, count(distinct candidate_id)::int candidatos_unicos, count(*) filter (where is_demo)::int demo,
         count(*) filter (where registration_completed_at is not null)::int registros_completados,
         count(*) filter (where prequal_completed_at is not null)::int precalificados,
         count(*) filter (where prequal_result = 'compatible')::int compatible,
@@ -106,6 +106,13 @@ export async function reportRoutes(app: FastifyInstance) {
         count(*) filter (where attended)::int entrevistas_realizadas, count(*) filter (where hired)::int contrataciones
       from cohort left join users u on u.id = cohort.recruiter_id group by 1,2 order by 3 desc`, params);
 
+    // Tendencia diaria de la cohorte (días del periodo en hora de CDMX, incluye días sin actividad)
+    const daily = await many(pool, `${cohort}
+      select to_char(d, 'YYYY-MM-DD') dia,
+        (select count(*) from cohort where (cohort.created_at at time zone '${config.timezone}')::date = d)::int postulaciones,
+        (select count(*) from cohort where (cohort.prequal_completed_at at time zone '${config.timezone}')::date = d)::int precalificados
+      from generate_series($1::date, $2::date, interval '1 day') d order by d`, params);
+
     // Fotografía actual (no depende del periodo): carga activa por etapa
     const sp: unknown[] = [];
     const scond = applicationScope(u, sp);
@@ -130,7 +137,7 @@ export async function reportRoutes(app: FastifyInstance) {
          from tracking_events e where e.created_at >= ($1::date)::timestamp at time zone '${config.timezone}' and e.created_at < ($2::date + 1)::timestamp at time zone '${config.timezone}'
          ${f.vacancyId ? 'and e.vacancy_id = $3' : ''}`, f.vacancyId ? [f.from, f.to, f.vacancyId] : [f.from, f.to]);
 
-    return { period: { from: f.from, to: f.to, timezone: config.timezone }, totals: t, conversions, visits, bySource, byRecruiter, byStage, goals, definitions: KPI_DEFINITIONS };
+    return { period: { from: f.from, to: f.to, timezone: config.timezone }, totals: t, conversions, visits, bySource, byRecruiter, byStage, goals, daily, definitions: KPI_DEFINITIONS };
   });
 
   /** Alertas operativas con evidencia y acción sugerida. */

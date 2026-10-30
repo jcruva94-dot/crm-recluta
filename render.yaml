@@ -22,6 +22,8 @@ services:
         generateValue: true
       - key: DELIVERY_MODE
         value: sandbox
+      - key: SEED_DEMO_ACTIVITY
+        value: "true"
       - key: EXPOSE_DEV_OTP
         value: "true"
       - key: APP_TIMEZONE

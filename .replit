@@ -5,6 +5,7 @@ run = "npm install && npm run build && npm run db:seed && npm start"
 [env]
 DELIVERY_MODE = "sandbox"
 EXPOSE_DEV_OTP = "true"
+SEED_DEMO_ACTIVITY = "true"
 APP_TIMEZONE = "America/Mexico_City"
 
 [[ports]]

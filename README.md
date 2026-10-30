@@ -19,6 +19,7 @@ npm install                         # instala server y web (workspaces)
 cp server/.env.example server/.env  # ajusta DATABASE_URL y OTP_SECRET
 createdb crm_recluta                # o usa docker compose
 npm run db:seed                     # aplica migraciones y crea datos DEMO
+npm run db:seed -- --actividad      # opcional: 84 candidatos ficticios (DEMO) para que el dashboard tenga movimiento
 npm run build                       # compila el frontend y el backend
 npm start                           # http://localhost:3000
 ```

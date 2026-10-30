@@ -3,7 +3,9 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, ApiError, uploadFile } from '../shared/api';
 import { fmtLongSlot, fmtDayHeader, dayKey, fmtTime } from '../shared/format';
 import { Button, Card, ErrorBox, Field, Input, Loading, Modal, Notice, Select, Textarea, useLoad } from '../shared/ui';
-import { CandidateShell, Progress } from './Shell';
+import { CandidateShell, Journey } from './Shell';
+import { Ring } from '../shared/charts';
+import { Icon } from '../shared/icons';
 import { OtpStep } from './Landing';
 
 function PortalNav() {
@@ -39,27 +41,36 @@ export function ApplicationPage() {
   return (
     <CandidateShell nav={<PortalNav />}>
       <div className="space-y-4">
-        <div>
-          <p className="text-sm text-slate-500">Tu postulación</p>
-          <h1 className="text-xl font-bold leading-tight">{app.vacancy.title}</h1>
-        </div>
-        <Progress steps={app.steps} current={app.stage.step} />
-        {search.get('recuperado') && <Notice tone="green">Encontramos tu registro anterior y lo recuperamos. Continúa donde te quedaste.</Notice>}
-
-        {app.nextStep === 'registro' && <RegistrationStep app={app} onDone={setData} />}
-        {app.nextStep === 'precalificacion' && <QuestionsStep app={app} onDone={setData} />}
-        {app.nextStep !== 'registro' && app.nextStep !== 'precalificacion' && (
-          <Card>
-            {(() => {
-              const useResult = app.resultMessage && (app.nextStep === 'agendar' || app.stage.title === 'Tu perfil está en revisión');
-              return (<>
-                <h2 className="text-lg font-semibold" data-testid="status-title">{useResult && app.nextStep === 'agendar' ? app.resultMessage.title : app.stage.title}</h2>
-                <p className="mt-1 text-slate-700">{useResult ? app.resultMessage.text : app.stage.message}</p>
-              </>);
-            })()}
-            {app.vacancy.response_time_text && !app.stage.closed && <p className="mt-2 text-sm text-slate-500">⏱ {app.vacancy.response_time_text}</p>}
-          </Card>
-        )}
+        {(() => {
+          const useResult = app.resultMessage && (app.nextStep === 'agendar' || app.stage.title === 'Tu perfil está en revisión');
+          const title = useResult && app.nextStep === 'agendar' ? app.resultMessage.title : app.stage.title;
+          const message = useResult ? app.resultMessage.text : app.stage.message;
+          const total = app.steps.length;
+          const done = app.stage.closed ? null : (app.stage.step ?? 0);
+          const showStatus = app.nextStep !== 'registro' && app.nextStep !== 'precalificacion';
+          return (
+            <>
+              <section className="bg-hero relative animate-rise overflow-hidden rounded-3xl p-5 text-white shadow-xl shadow-brand-900/20">
+                <div aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
+                <div className="relative flex items-center gap-4">
+                  <Ring value={done == null ? 0 : (done + 0.5) / total} size={84} stroke={8}>
+                    {done == null ? <span className="text-xs font-semibold">Cerrado</span> : <><span className="text-xl font-extrabold leading-none">{done + 1}<span className="text-sm font-semibold text-white/70">/{total}</span></span><span className="text-[10px] text-white/75">paso</span></>}
+                  </Ring>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-white/70">Tu postulación</p>
+                    <h1 className="text-lg font-extrabold leading-tight">{app.vacancy.title}</h1>
+                    {showStatus && <p className="mt-1.5 inline-flex rounded-full bg-white/15 px-3 py-1 text-sm font-semibold ring-1 ring-white/20" data-testid="status-title">{title}</p>}
+                  </div>
+                </div>
+                {showStatus && <p className="relative mt-4 text-sm text-white/90">{message}</p>}
+                {showStatus && app.vacancy.response_time_text && !app.stage.closed && <p className="relative mt-2 flex items-center gap-1.5 text-xs text-white/70"><Icon name="clock" className="h-3.5 w-3.5" />{app.vacancy.response_time_text}</p>}
+              </section>
+              {search.get('recuperado') && <Notice tone="green">Encontramos tu registro anterior y lo recuperamos. Continúa donde te quedaste.</Notice>}
+              {app.nextStep === 'registro' && <RegistrationStep app={app} onDone={setData} />}
+              {app.nextStep === 'precalificacion' && <QuestionsStep app={app} onDone={setData} />}
+            </>
+          );
+        })()}
         {app.nextStep === 'agendar' && <SlotPicker app={app} onDone={setData} />}
         {app.documents?.length > 0 && <Documents app={app} onChange={setData} />}
         {app.interviews.filter((i: any) => ['agendada', 'confirmada'].includes(i.status)).map((i: any) => <InterviewCard key={i.id} app={app} interview={i} onChange={setData} />)}
@@ -71,6 +82,10 @@ export function ApplicationPage() {
             ))}</ul>
           </Card>
         )}
+
+        <Card title="Tu camino">
+          <Journey steps={app.steps} current={app.stage.step} closed={app.stage.closed} />
+        </Card>
 
         <div className="flex flex-wrap justify-between gap-2 pt-2 text-sm">
           <Link to="/portal?tab=ayuda" className="font-semibold text-brand-700 underline">¿Necesitas ayuda?</Link>

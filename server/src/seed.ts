@@ -133,8 +133,12 @@ export async function seedBase() {
 
 if (process.argv[1] && path.basename(process.argv[1]).startsWith('seed')) {
   seedBase()
-    .then((created) => {
+    .then(async (created) => {
       console.log(created ? 'Datos de demostración creados.' : 'Los datos de demostración ya existían.');
+      if (process.env.SEED_DEMO_ACTIVITY === 'true' || process.argv.includes('--actividad')) {
+        const { seedDemoActivity } = await import('./demo-activity.js');
+        console.log((await seedDemoActivity()) ? 'Actividad de demostración creada (candidatos marcados como DEMO).' : 'La actividad de demostración ya existía.');
+      }
       console.log(`Usuarios de prueba (contraseña: ${DEMO_PASSWORD}):`);
       for (const u of DEMO_USERS) console.log(`  ${u.role.padEnd(14)} ${u.email}`);
       console.log(`Liga de prueba: ${config.publicBaseUrl}/empleo/l/ventas-fb`);

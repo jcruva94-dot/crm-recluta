@@ -170,14 +170,24 @@ try {
   const desk = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'es-MX', timezoneId: 'America/Mexico_City' });
   const admin = await desk.newPage();
   admin.on('console', (m) => m.type() === 'error' && consoleErrors.push('[admin] ' + m.text()));
-  await step('Admin: login y dashboard con datos reales', async () => {
+  await step('Reclutador: login y "Mi día" con su carga asignada', async () => {
     await admin.goto(`${BASE}/admin`);
     await admin.waitForURL(/\/admin\/login/);
     await admin.getByLabel('Correo').fill('reclutador1@demo.test');
     await admin.getByLabel('Contraseña').fill('Demo-2026!');
     await admin.getByRole('button', { name: 'Entrar' }).click();
+    await admin.getByRole('heading', { name: /, Rocío$/ }).waitFor();
+    await admin.getByRole('heading', { name: 'Por contactar' }).waitFor();
+    await admin.getByRole('heading', { name: 'Entrevistas de hoy' }).waitFor();
+    await admin.waitForTimeout(1200);
+    await admin.screenshot({ path: `${OUT}/10a-mi-dia.png`, fullPage: true });
+  });
+
+  await step('Admin: dashboard de indicadores con datos reales', async () => {
+    await admin.getByRole('link', { name: 'Indicadores' }).click();
     await admin.getByRole('heading', { name: 'Dashboard de reclutamiento' }).waitFor();
     await admin.getByText('Candidatos únicos').waitFor();
+    await admin.waitForTimeout(1500);
     await admin.screenshot({ path: `${OUT}/10-dashboard.png`, fullPage: true });
   });
 

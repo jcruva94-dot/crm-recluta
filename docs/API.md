@@ -69,6 +69,7 @@ Todas validan que la postulación o cita pertenezca al candidato de la sesión (
 | POST | `/admin/interviews/:id/attendance` `{status: realizada|no_asistio, result?, notes?}` | interview.evaluate |
 | GET | `/admin/dashboard?from&to&vacancyId&sourceId&recruiterId&campaignId` | dashboard.read |
 | GET | `/admin/alerts` | application.read |
+| GET | `/admin/my-day` (postulaciones asignadas al usuario: por contactar, citas de hoy, tareas, semana vs. anterior, pipeline, avances) | application.read |
 | GET/POST | `/admin/duplicates` · `/admin/duplicates/:id/resolve` | duplicates.resolve |
 | GET | `/admin/messages` | messages.read |
 | GET/POST | `/admin/notifications` · `/admin/notifications/read` | sesión |

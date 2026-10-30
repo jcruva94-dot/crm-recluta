@@ -7,6 +7,7 @@ import { ApplicationPage, PortalHome, PortalLogin } from './candidate/Portal';
 import { AdminLayout } from './admin/Layout';
 import { AdminLogin } from './admin/Login';
 import { Dashboard } from './admin/Dashboard';
+import { AdminHome } from './admin/MyDay';
 import { Pipeline } from './admin/Pipeline';
 import { ApplicationDetail } from './admin/ApplicationDetail';
 import { Vacancies, VacancyEdit } from './admin/Vacancies';
@@ -29,7 +30,8 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/portal/postulacion/:id" element={<ApplicationPage />} />
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<Dashboard />} />
+          <Route index element={<AdminHome dashboard={<Dashboard />} />} />
+          <Route path="indicadores" element={<Dashboard />} />
           <Route path="tareas" element={<Tasks />} />
           <Route path="pipeline" element={<Pipeline />} />
           <Route path="postulaciones/:id" element={<ApplicationDetail />} />

@@ -27,7 +27,7 @@ function rng(seed: number) {
 }
 
 export async function seedDemoActivity(total = 84) {
-  if (await one(pool, 'select 1 from applications where is_demo limit 1')) return false;
+  if (await one(pool, 'select 1 from applications where is_demo limit 1')) { await backfillDemoTasks(); return false; }
   const v = await one(pool, `select id, threshold_compatible, threshold_observations from vacancies where slug = 'asesor-ventas-telefonicas'`);
   if (!v) return false;
   const users = Object.fromEntries((await many(pool, `select email, id from users where is_demo`)).map((u: any) => [u.email, u.id]));
@@ -164,6 +164,7 @@ export async function seedDemoActivity(total = 84) {
         [app.id, stage, end[2], end[4], ...cols.map((c) => set[c])]);
     }
     await client.query('commit');
+    await backfillDemoTasks();
     return true;
   } catch (e) {
     await client.query('rollback');
@@ -171,4 +172,22 @@ export async function seedDemoActivity(total = 84) {
   } finally {
     client.release();
   }
+}
+
+/**
+ * Tareas abiertas de las postulaciones DEMO, coherentes con la etapa en la que quedaron (como las crearía el sistema).
+ * Idempotente: solo crea la tarea si esa postulación no tiene ya una del mismo tipo.
+ */
+export async function backfillDemoTasks() {
+  await pool.query(`
+    insert into tasks(application_id, type, title, assignee_id, due_at, priority, created_at)
+    select a.id, t.type, t.title || ' (DEMO)', a.recruiter_id, a.stage_entered_at + (t.hours || ' hours')::interval, t.priority, a.stage_entered_at
+      from applications a
+      join (values ('contacto_pendiente','contactar','Contactar candidato para agendar entrevista',24,'alta'),
+                   ('revision_compatibilidad','revisar_perfil','Revisar compatibilidad del perfil',24,'media'),
+                   ('entrevista_realizada','entrevistar','Registrar decisión posterior a la entrevista',24,'media'),
+                   ('documentacion_pendiente','validar_documentos','Dar seguimiento a documentos pendientes',48,'media'),
+                   ('oferta','emitir_oferta','Dar seguimiento a la oferta',24,'alta')) t(stage, type, title, hours, priority) on t.stage = a.stage_code
+     where a.is_demo and a.recruiter_id is not null
+       and not exists (select 1 from tasks x where x.application_id = a.id and x.type = t.type)`);
 }

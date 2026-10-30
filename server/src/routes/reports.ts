@@ -182,4 +182,78 @@ export async function reportRoutes(app: FastifyInstance) {
     }
     return { alerts };
   });
+
+  /**
+   * "Mi día": lo que el usuario tiene asignado hoy. Siempre limitado a postulaciones con recruiter_id = usuario
+   * (y además a su alcance), para que cada reclutador vea su propia carga.
+   */
+  app.get('/my-day', async (req) => {
+    const u = requireStaff(req, 'application.read');
+    const tz = config.timezone;
+    const mine = (p: unknown[]) => { const c = applicationScope(u, p); p.push(u.id); return `${c} and a.recruiter_id = $${p.length}`; };
+
+    const p1: unknown[] = [];
+    const toContact = await many(pool,
+      `select a.id, c.first_name || ' ' || c.last_name name, c.phone_e164 phone, v.title vacancy, a.stage_code, ps.name stage, a.prequal_result,
+              a.stage_entered_at, a.last_contact_at, (ps.sla_hours is not null and a.stage_entered_at < now() - (ps.sla_hours || ' hours')::interval) overdue
+         from applications a join candidates c on c.id = a.candidate_id join vacancies v on v.id = a.vacancy_id join pipeline_stages ps on ps.code = a.stage_code
+        where ${mine(p1)} and a.stage_code in ('contacto_pendiente','revision_compatibilidad')
+        order by a.stage_entered_at limit 8`, p1);
+
+    const p2: unknown[] = [];
+    const interviews = await many(pool,
+      `select i.id, i.status, a.id application_id, c.first_name || ' ' || c.last_name name, v.title vacancy, s.starts_at, s.ends_at, s.mode, s.location, uu.full_name interviewer
+         from interviews i join interview_slots s on s.id = i.slot_id join applications a on a.id = i.application_id
+         join candidates c on c.id = a.candidate_id join vacancies v on v.id = a.vacancy_id join users uu on uu.id = s.interviewer_id
+        where ${mine(p2)} and i.status in ('agendada','confirmada','realizada','no_asistio')
+          and (s.starts_at at time zone '${tz}')::date = (now() at time zone '${tz}')::date
+        order by s.starts_at`, p2);
+
+    const tasks = await many(pool,
+      `select t.id, t.title, t.type, t.priority, t.due_at, t.application_id, c.first_name || ' ' || c.last_name candidate_name,
+              t.due_at < now() overdue
+         from tasks t left join applications a on a.id = t.application_id left join candidates c on c.id = a.candidate_id
+        where t.assignee_id = $1 and t.status in ('pendiente','en_proceso')
+        order by (t.due_at < now()) desc, case t.priority when 'alta' then 0 when 'media' then 1 else 2 end, t.due_at limit 300`, [u.id]);
+    const endOfDay = `((now() at time zone '${tz}')::date + 1)::timestamp at time zone '${tz}'`;
+    const dueToday = (await one(pool, `select count(*)::int n from tasks where assignee_id = $1 and status in ('pendiente','en_proceso') and due_at >= now() and due_at < ${endOfDay}`, [u.id]))!.n;
+
+    // Últimos 7 días (incluye hoy) contra los 7 anteriores
+    const p3: unknown[] = [];
+    const week = await one(pool,
+      `with mine as (select a.id from applications a where ${mine(p3)}),
+            w as (select ((now() at time zone '${tz}')::date - 6)::timestamp at time zone '${tz}' cur, ((now() at time zone '${tz}')::date - 13)::timestamp at time zone '${tz}' prev)
+       select
+         (select count(*) from notes n, w where n.application_id in (select id from mine) and n.kind = 'contacto' and n.created_at >= w.cur)::int contactos,
+         (select count(*) from notes n, w where n.application_id in (select id from mine) and n.kind = 'contacto' and n.created_at >= w.prev and n.created_at < w.cur)::int contactos_prev,
+         (select count(*) from interviews i join interview_slots s on s.id = i.slot_id, w where i.application_id in (select id from mine) and i.status = 'realizada' and s.starts_at >= w.cur)::int entrevistas,
+         (select count(*) from interviews i join interview_slots s on s.id = i.slot_id, w where i.application_id in (select id from mine) and i.status = 'realizada' and s.starts_at >= w.prev and s.starts_at < w.cur)::int entrevistas_prev,
+         (select count(distinct h.application_id) from stage_history h, w where h.application_id in (select id from mine) and h.to_code = 'contratacion_confirmada' and h.created_at >= w.cur)::int contrataciones,
+         (select count(distinct h.application_id) from stage_history h, w where h.application_id in (select id from mine) and h.to_code = 'contratacion_confirmada' and h.created_at >= w.prev and h.created_at < w.cur)::int contrataciones_prev`, p3);
+
+    const p4: unknown[] = [];
+    const pipeline = await many(pool,
+      `select ps.code, ps.name, ps.position, count(*)::int total
+         from applications a join pipeline_stages ps on ps.code = a.stage_code
+        where ${mine(p4)} and ps.category = 'activo' group by ps.code order by ps.position`, p4);
+
+    const p5: unknown[] = [];
+    const wins = await many(pool,
+      `select h.application_id, c.first_name || ' ' || c.last_name name, ps.name stage, h.to_code, h.created_at
+         from stage_history h join applications a on a.id = h.application_id join candidates c on c.id = a.candidate_id join pipeline_stages ps on ps.code = h.to_code
+        where ${mine(p5)} and h.to_code in ('entrevista_realizada','oferta_aceptada','contratacion_confirmada','ingreso_efectivo')
+        order by h.created_at desc limit 6`, p5);
+
+    return {
+      user: { fullName: u.fullName }, today: new Date().toLocaleDateString('en-CA', { timeZone: tz }),
+      toContact, interviews,
+      tasks: { open: tasks.length, overdue: tasks.filter((t) => t.overdue).length, dueToday, top: tasks.slice(0, 6) },
+      week, pipeline, wins,
+      definitions: {
+        toContact: 'Tus postulaciones (asignadas a ti) en Contacto pendiente o Revisión de compatibilidad, la más antigua primero',
+        interviews: 'Citas de hoy (hora de CDMX) de tus postulaciones',
+        week: 'Últimos 7 días incluyendo hoy, contra los 7 días anteriores. Contactos = registros de contacto en la ficha',
+      },
+    };
+  });
 }

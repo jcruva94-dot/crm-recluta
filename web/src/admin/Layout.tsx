@@ -44,7 +44,7 @@ export function AdminLayout() {
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-brand-700 shadow-lg"><Icon name="bolt" className="h-5 w-5" /></span> Recluta<span className="font-medium text-white/60">CRM</span>
           </div>
           <nav className="flex-1 space-y-1 overflow-y-auto px-3" aria-label="Principal">
-            {NAV.filter(([, , , p]) => !p || can(p)).map(([to, label, icon]) => (
+            {(me.user.role === 'reclutador' ? [['/admin', 'Mi día', 'home'] as [string, string, string], ['/admin/indicadores', 'Indicadores', 'chart', 'dashboard.read'] as [string, string, string, string], ...NAV.slice(1)] : NAV).filter(([, , , p]) => !p || can(p)).map(([to, label, icon]) => (
               <NavLink key={to} to={to} end={to === '/admin'} onClick={() => setMenu(false)} className={({ isActive }) => `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${isActive ? 'bg-white font-semibold text-brand-800 shadow-lg shadow-brand-900/20' : 'text-white/80 hover:bg-white/10 hover:text-white'}`}>
                 <Icon name={icon} className="h-[18px] w-[18px]" />{label}
               </NavLink>

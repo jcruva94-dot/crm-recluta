@@ -20,3 +20,25 @@ describe('actividad de demostración', () => {
     expect(d.totals.postulaciones).toBeGreaterThanOrEqual(30);
   });
 });
+
+describe('mi día del reclutador', () => {
+  it('solo muestra lo asignado al usuario y cuadra con la base', async () => {
+    const r1 = await staff('reclutador1@demo.test');
+    const res = await r1.get('/api/admin/my-day');
+    expect(res.status).toBe(200);
+    const me = (await pool.query(`select id from users where email = 'reclutador1@demo.test'`)).rows[0].id;
+    const ids = res.body.toContact.map((x: any) => x.id);
+    if (ids.length) {
+      const other = (await pool.query(`select count(*)::int n from applications where id = any($1) and recruiter_id is distinct from $2`, [ids, me])).rows[0].n;
+      expect(other).toBe(0);
+    }
+    const open = (await pool.query(`select count(*)::int n from tasks where assignee_id = $1 and status in ('pendiente','en_proceso')`, [me])).rows[0].n;
+    expect(res.body.tasks.open).toBe(open);
+    expect(res.body.tasks.top.length).toBeLessThanOrEqual(6);
+    const active = (await pool.query(`select count(*)::int n from applications a join pipeline_stages ps on ps.code = a.stage_code where a.recruiter_id = $1 and ps.category = 'activo'`, [me])).rows[0].n;
+    expect(res.body.pipeline.reduce((s: number, p: any) => s + p.total, 0)).toBe(active);
+    // Otro reclutador no ve los pendientes de Rocío
+    const r2 = (await (await staff('reclutador2@demo.test')).get('/api/admin/my-day')).body;
+    expect(r2.toContact.filter((x: any) => ids.includes(x.id))).toHaveLength(0);
+  });
+});

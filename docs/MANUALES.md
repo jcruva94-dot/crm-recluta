@@ -26,7 +26,9 @@ Resultados: *Compatible* (puntuación ≥ umbral compatible) y *Compatible con o
 
 ## 2. Manual del reclutador
 
-**Empieza el día en la Bandeja de trabajo**: tareas ordenadas por vencidas primero y prioridad. Se crean solas al entrar a etapas clave (contactar, revisar perfil, registrar decisión tras entrevista), al recibir una solicitud de ayuda o cuando alguien no asiste.
+**Empieza el día en "Mi día"** (tu pantalla de inicio): a quién contactar primero, tus entrevistas de hoy, tareas vencidas, tu semana contra la anterior y tus candidatos activos. Todo es tuyo: solo aparecen postulaciones asignadas a ti. El dashboard general está en *Indicadores*.
+
+**Bandeja de trabajo**: tareas ordenadas por vencidas primero y prioridad. Se crean solas al entrar a etapas clave (contactar, revisar perfil, registrar decisión tras entrevista), al recibir una solicitud de ayuda o cuando alguien no asiste.
 
 **Pipeline.** Kanban (arrastra la tarjeta o usa "Mover") o tabla (filtros combinables, orden, paginación, selección múltiple). Solo se ofrecen transiciones válidas; las etapas de cierre piden motivo. Ámbar = estancado (superó el tiempo objetivo de la etapa).
 
